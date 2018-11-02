@@ -103,7 +103,7 @@ venv.bak/
 # mypy
 .mypy_cache/
 
-# spcial files
+# special files
 .DS_Store
 ._.DS_Store
 ._main.py
