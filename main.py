@@ -1,11 +1,12 @@
+# credential for the static network analysis go to James Tollefson: https://www.kaggle.com/jamestollefson/enron-network-analysis
+
 import numpy as np
 import pandas as pd
 import os
 import argparse
-#from functions.VAE_pixel import train # from folder functions import form the VAE_pixel file the function train
-
-
-print('ok')
+import re
+from functions.prepare import prepare_data # from folder functions import from the prepare file the function prepare_data
+import matplotlib.pyplot as plt
 
 # parser function to collect and pass on values from terminal
 def parser():
@@ -19,15 +20,20 @@ def parser():
 # pass on parser values
 data_link = parser()
 
-print(data_link)
-
 # load data
 pd.options.mode.chained_assignment = None
 chunk = pd.read_csv(data_link, chunksize=500)
 data = next(chunk)
 
-data.info()
-print(data.message[2])
+# printing data information
+#data.info()
+#print(data.message[2])
+
+data = prepare_data(data)
+
+print(data.head())
+
+
 
 # main function
 if __name__ == '__main__':
