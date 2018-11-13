@@ -11,7 +11,9 @@ def get_text(Series, row_num_slicer):
     for row, message in enumerate(Series):
         message_words = message.split('\n')
         del message_words[:row_num_slicer]
+        message_words = ' '.join(message_words)
         result.iloc[row] = message_words
+
     return result
 
 def get_row(Series, row_num):
@@ -68,6 +70,7 @@ def prepare_data(data):
     data = data.reset_index()
     print("Got rid of {} useless emails! That's {}% of the total number of messages in this dataset.".format(x - len(data.index), np.round(((x - len(data.index)) / x) * 100, decimals=2)))
 
+    #print(data.message)
     data['text'] = get_text(data.message, 15)
     data['date'] = get_row(data.message, 1)
     data['senders'] = get_row(data.message, 2)
@@ -90,6 +93,4 @@ def prepare_data(data):
     data = data[['date', 'sender', 'recipient1', 'recipient2', 'recipient3', 'subject', 'text']]
 
     return data
-
-
 
