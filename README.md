@@ -1,2 +1,2 @@
-# enron_analysis
-Network analysis of Enron dataset
+# Network Analysis of Enron Dataset
+
