@@ -1,3 +1,13 @@
+########################################################################
+#TO DO
+
+'''
+- prepare.py: bug if no correspondent found in get_address
+'''
+
+########################################################################
+# IMPORT
+
 # added to fix display issues
 import matplotlib
 matplotlib.use('Agg')
@@ -11,9 +21,12 @@ import os
 import argparse
 import re
 import csv
+import glob
+from tqdm import tqdm # showing progress
 # network analysis
 import networkx as nx
 import nxviz as nv
+import igraph as ig
 # time analysis
 from datetime import datetime
 # visualization
@@ -62,18 +75,21 @@ def parser():
 # pass on parser values
 data_link, not_load, arcplot, circosplot, draw_network, degree_centrality, betweenness_centrality, time_difference = parser()
 
+
+########################################################################
+# PARALLELIZATION
+
+
+
 ########################################################################
 # DATA LOADING
 
 # load data
 if not_load:
-    # load already prepared data
-    data = pd.read_csv('./data/prepared/data.csv')
-
+    data = pd.concat([pd.read_csv(f) for f in glob.glob('./data/prepared/chunk-*.csv')])
     print('data loaded')
 
 else:
-
     # creating pool of processes for parallelization
     with concurrent.futures.ProcessPoolExecutor() as executor:
 
@@ -85,27 +101,44 @@ else:
             result.to_csv('./data/prepared/chunk-{}.csv'.format(i))
 
     print('data prepared and saved')
-'''
+
+########################################################################
+# MAKING GRAPH
+
+# create graph of data
+g = ig.Graph.TupleList(data[['sender', 'recipient1']].itertuples(index=False), weights=False)
+
+print('graph made')
+
 ########################################################################
 # PLOTTING
 
-# create graph of data
-#G = nx.from_pandas_edgelist(data, 'sender', 'recipient1', edge_attr=['date', 'subject'],)
+# if wanted, draw network with communities
+if draw_network:
+    # creating pool of processes for parallelization
+    layout = g.layout('fr') # Fruchterman-Reingold force-directed algorithm
+    communities = g.community_multilevel()
+    ig.plot(communities, './figures/communities.png', mark_groups=True, vertex_label=None, layout=layout, vertex_size=3)
+
+    print('network drawn')
+
+'''
 
 # if wanted, make arcplot
 if arcplot:
-    make_arcplot(G)
-    print('arcplot made')
+
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+
+        future = executor.submit(make_arcplot, G)
+        arcplot = future.result()
+
+        print('arcplot made')
+
 
 # if wanted, make circosplot
 if circosplot:
     make_circosplot(G)
     print('circosplot made')
-
-# if wanted, draw network
-if draw_network:
-    draw(G)
-    print('network drawn')
 
 # if wanted, make plot of degree centrality
 if degree_centrality:
