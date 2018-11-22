@@ -1,3 +1,6 @@
+# credential go to James Tollefson: https://www.kaggle.com/jamestollefson/enron-network-analysis
+########################################################################
+
 import numpy as np
 import pandas as pd
 import re
@@ -37,6 +40,10 @@ def get_address(df, Series, num_cols=1):
         for message in Series:
             correspondents = re.findall(address, message)
             addresses.append(correspondents)
+            if len(addresses[i]) == 0:
+                print('what happend?')
+                print(len(addresses[i]), correspondents, message)
+                continue
             result1[i] = addresses[i][0]
         if num_cols >= 2:
             if len(addresses[i]) >= 3:
