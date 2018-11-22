@@ -108,3 +108,4 @@ venv.bak/
 ._.DS_Store
 ._main.py
 data/
+._*.*
