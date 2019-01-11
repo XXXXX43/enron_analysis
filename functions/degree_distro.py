@@ -1,48 +1,57 @@
 import matplotlib.pyplot as plt
 import numpy as np
-import igraph as ig
+import seaborn as sns
 
-# fit function
-def fit_gamma(G, kmin, kmax):
+
+def fit_gamma(G, kmin, kmax, in_degree=True):
     krange = np.array(range(kmin, kmax+1))
-    data = np.array([k for k in G.degree() if k in krange])
+    if in_degree:
+        data = np.array([k for k in G.indegree() if k in krange])
+    else:
+        data = np.array([k for k in G.outdegree() if k in krange])
     return 1 + len(data) / np.sum(np.log(data / (kmin - 0.5)))
 
+
+def power_law_dist(G, kmin, kmax, gamma):
+    assert kmin >= 1
+    assert kmax < G.vcount()
+
+    p = np.zeros((G.vcount(),))
+    for i in range(kmin, kmax+1):
+        p[i] = i**(-gamma)
+    p /= np.sum(p)
+    return p
+
+
 def degree_distro(g):
-    # get maximum degree
-    degrees = g.degree()
-    id_max = np.argmax(degrees)
-    degree_max = degrees[id_max]
+    # out degree
+    bins_out = np.logspace(0, 2.8, 100)
+    hist_out, _ = np.histogram(g.outdegree(), bins=bins_out)
+    hist_out = hist_out / g.vcount()
+    # Fit for data with degree in range [1, 800]
+    gamma_out = fit_gamma(g, 1, 800, in_degree=False)
+    P_out = power_law_dist(g, 1, g.vcount() - 1, gamma_out)
 
-    # degree distribution
-    degree_distro = g.degree_distribution() # degree distribution
-    k_p = np.array(list(degree_distro.bins()))[:,::2].T
-    k = k_p[0] # degrees
-    p_k = k_p[1] / np.sum(k_p[1]) # probabilities
-
-    # bins of logscale size for degree distribution
-    bins = np.logspace(0, np.log10(degree_max), 100)
-    hist, _ = np.array(np.histogram(g.degree(), bins=bins))
-    hist = hist / len(g.degree())
-
-    # fit to linear regions
-    kmin = 1
-    kmid = 50
-    kmax = degree_max
-    gamma_low = fit_gamma(g, kmin, kmid)
-    gamma_high = fit_gamma(g, kmid, kmax)
+    # in degree
+    bins_in = np.logspace(0, 2.8, 100)
+    hist_in, _ = np.histogram(g.indegree(), bins=bins_in)
+    hist_in = hist_in / g.vcount()
+    # Fit for data with degree in range [1, 800]
+    gamma_in = fit_gamma(g, 1, 800, in_degree=True)
+    P_in = power_law_dist(g, 1, g.vcount() - 1, gamma_in)
 
     # plot
-    plt.figure(figsize=(20,15))
-    plt.subplot(121)
-    plt.loglog(bins[:-1], hist, '.')
-    plt.loglog(k[kmin:kmid], k[kmin:kmid]**(-gamma_low)/np.sum(k[kmin:kmid]**(-gamma_low)), \
-            label = "$\gamma = {}$".format(round(gamma_low, 3)))
-    plt.loglog(k[kmid:kmax], k[kmid:kmax]**(-gamma_high)/np.sum(k[kmid:kmax]**(-gamma_high)), \
-            label = "$\gamma = {}$".format(round(gamma_high, 3)))
-    plt.title("Degree distribution of Enron e-mail graph".format(bins.shape[0]))
+    sns.set_style("whitegrid")
+    plt.figure(figsize=(7, 5))
+    plt.loglog(bins_out[:-1], hist_out, 'b.')
+    plt.loglog(range(0, g.vcount()), P_out, 'b-', label="$\gamma_o = {}$".format(round(gamma_out, 2)))
+    plt.loglog(bins_in[:-1], hist_in, 'r.')
+    plt.loglog(range(0, g.vcount()), P_in, 'r-', label="$\gamma_i = {}$".format(round(gamma_in, 2)))
     plt.ylabel("$p_k$")
     plt.xlabel("$k$")
+    plt.xlim(1, 10**2.8)
+    plt.ylim(10**-4.25, 1)
+    plt.title("Degree Distribution of Enron Email Graph")
     plt.legend()
     plt.savefig('./statistics/distro.png')
 
