@@ -108,7 +108,5 @@ venv.bak/
 ._.DS_Store
 ._main.py
 data/
-figures/
 chronik.txt
-statistics/
 ._*.*
