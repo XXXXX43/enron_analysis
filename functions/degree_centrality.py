@@ -9,7 +9,7 @@ import seaborn as sns
 
 def dc(g):
     # getting values
-    centrality = g.betweenness(directed=True)
+    centrality = g.betweenness(directed=True, weights='weight')
     name = g.vs['name']
     # making pandas dataframe
     cent = pd.DataFrame()
@@ -19,7 +19,7 @@ def dc(g):
     # plot
     matplotlib.rcParams.update({'font.size': 22})
     plt.figure(figsize=(40, 15))
-    _ = sns.barplot(x='centrality', y='name', data=cent[:15], orient='h')
+    _ = sns.barplot(x='centrality', y='name', data=cent[:15], orient='h', color="salmon", saturation=.5)
     _ = plt.xlabel('Degree Centrality')
     _ = plt.ylabel('Person')
     _ = plt.title('Top 15 Degree Centrality Scores in Enron Email Network')

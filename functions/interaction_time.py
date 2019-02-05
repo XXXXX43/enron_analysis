@@ -1,9 +1,22 @@
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
+from datetime import datetime
+
+
+# function to sort e-mail partners
+def conv_partner(partner1, partner2):
+    partners = [partner1, partner2]
+    sorted_partners = np.sort(partners)
+    return sorted_partners[0] + '-' + sorted_partners[1]
 
 
 def interaction_time(data):
+
+    # get pairs of communication partner
+    data['conv_partner'] = data.apply(lambda r: conv_partner(r['sender'], r['recipient']), axis=1)
+
+    # convert time to datetime
+    data['date'] = data['date'].apply(lambda d: datetime.fromtimestamp(d))
 
     # group conversation partners
     conv_partners = data.groupby('conv_partner')
@@ -24,12 +37,12 @@ def interaction_time(data):
     # bins of logscale size for degree distribution
     bins = np.logspace(0, np.log10(max(time_dif)), 100)
 
-    #plot
+    # plot
     plt.xscale('symlog')
-    plt.hist(time_dif, bins, normed=1, facecolor='green', alpha=0.75)
-    plt.xlabel("$t[h]$")
-    plt.ylabel('Probability [%]')
-    plt.title("Distribution of Interaction Time Differences of Conversation Partners")
+    plt.hist(time_dif, bins, density=True, facecolor='salmon', alpha=0.5)
+    plt.xlabel(r"$t[h]$")
+    plt.ylabel('probability')
+    plt.title("Interaction Times of Conversation Partners")
     plt.grid(True)
 
     plt.savefig('./statistics/time_dif.png')
