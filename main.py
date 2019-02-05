@@ -31,8 +31,6 @@ import igraph as ig
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import time
-# for parallelization
-import concurrent.futures
 # visualization
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -42,7 +40,6 @@ import matplotlib.mlab as mlab
 from igraph.drawing.text import TextDrawer
 import cairo
 # functions loaded form other files
-#from functions.processing import process_text # from folder functions import from the prepare file the function prepare_data
 from functions.degree_distro import degree_distro
 from functions.degree_centrality import dc
 from functions.preprocessing import prepare_data
@@ -50,7 +47,8 @@ from functions.sentiment_analysis import sentiment_analysis
 from functions.interaction_time import interaction_time
 from functions.activity import activity_plot
 from functions.measure_changes import measure_change
-from functions.plot_routines import lineplot, boxplot, violinplot
+from functions.plot_routines import lineplot, boxplot
+from functions.dynamics import dynamics_analysis
 
 
 ########################################################################
@@ -73,6 +71,7 @@ def parser():
     parser.add_argument("--interaction", help='Plot interaction time differences', action='store_true') # default is false
     parser.add_argument("--activity", help='Plot e-mail activity over time', action='store_true') # default is false
     parser.add_argument("--detect_change", help='Detect changes in network measures', action='store_true') # default is false
+    parser.add_argument("--dynamic", help='Analysis dynamic case', action='store_true') # default is false
 
     args = parser.parse_args()
 
@@ -87,11 +86,13 @@ def parser():
     interaction = args.interaction
     activity = args.activity
     detect_change = args.detect_change
+    dynamic = args.dynamic
 
-    return data_link, not_load, draw_static, draw_dynamic, cols, distro, centrality, sentiment, interaction, activity, detect_change
+    return data_link, not_load, draw_static, draw_dynamic, cols, distro, centrality, sentiment, interaction, activity, detect_change, dynamic
+
 
 # pass on parser values
-data_link, not_load, draw_static, draw_dynamic, cols, distro, centrality, sentiment, interaction, activity, detect_change = parser()
+data_link, not_load, draw_static, draw_dynamic, cols, distro, centrality, sentiment, interaction, activity, detect_change, dynamic = parser()
 
 
 ########################################################################
@@ -99,7 +100,7 @@ data_link, not_load, draw_static, draw_dynamic, cols, distro, centrality, sentim
 
 # load data
 if not_load:
-    data = pd.read_csv(data_link, header=0, sep=' ', usecols=cols)#.head(100000)
+    data = pd.read_csv(data_link, header=0, sep=' ', usecols=cols)#.head(10000)
     print('data loaded')
 
 else:
@@ -369,255 +370,12 @@ if detect_change:
     measure_change(g, start, end, measure='sentiment')
 
 
-def calc_weights(data, curr, exp):
-
-    '''
-    parameter:
-    - data: pandas dataframe of data, has to have column date
-    - curr: current date; datetime object
-    - exp: faktor reducing weight per month; int
-    '''
-
-    data['weight'] = data['date'].apply(lambda x: 1/(exp**np.abs(relativedelta(x, curr).months)))
-
-    return data
-
-
-def dynamics_analysis(data, centrality_ana=True, add_up=True, gamma=2, min_ver=500):
-
-    '''
-    parameter:
-    - data: pandas dataframe of data
-    - centrality: Analyze centrality? (computational intensive); bool
-    - add_up: add up data from past without decay of influence; bool
-    - gamma: faktor reducing weight per month; int
-    - min_ver: mimimum number of vertices to calculate measures; int
-    '''
-
-    # information to extract
-    dates_str = []
-    #dates_const = []
-    num_ver = []  # number of vertices
-    mean_deg = []  # mean degrees
-    max_deg = []  # max degree
-    deg = [] # complete degree data
-    mean_cent = []  # mean centrality
-    cent = [] # complete centrality data
-    # store degrees of some person
-    mark_taylor_deg = []
-    vince_kaminski_deg = []
-    tana_jones_deg = []
-    klay_deg = []
-    # store centralities of some person
-    mark_taylor_cent = []
-    vince_kaminski_cent = []
-    tana_jones_cent = []
-    klay_cent = []
-
-    # iterate over months in timerange
-    start = datetime(1998, 1, 1)
-    end = datetime(2003, 1, 1)
-    #end = datetime(2000, 1, 1)
-    current = start + relativedelta(months=1)
-
-    while current <= end:
-        # current date as string
-        current_string = current.strftime('%d/%m/%Y')
-        print(current_string)
-
-        # data up to current month
-        current_data = data.where(data['date'] < current)
-        # drop nan
-        current_data = current_data.dropna(axis=0, how='any')
-
-        if not add_up:
-            # calcualte weights
-            current_data = calc_weights(current_data, current, exp=gamma)
-
-        # create graph of data
-        current_g = ig.Graph.TupleList(current_data[['sender', 'recipient']].itertuples(index=False), weights=False)
-        # simplify graph
-        if add_up:
-            # simplify graph by removing loops and multiple edges
-            current_g = current_g.simplify(multiple=True, loops=True, combine_edges=None)
-        else:
-            # add weights
-            current_g.es['weight'] = current_data['weight'].values
-            # simplify graph by removing loops and multiple edges, taking latest edge if multiple exist
-            current_g = current_g.simplify(multiple=True, loops=True, combine_edges='max')
-
-        # continue working with largest connected component
-        #current_g = current_g.clusters().giant()
-
-        if not add_up:
-            # only take the edges that are not older then 3 months
-            limit = 1/(gamma**3)
-            seq = current_g.es.select(weight_gt=limit)
-            current_g = current_g.subgraph_edges(seq)
-
-        # at least 50 vertices
-        ver = len(current_g.vs)
-
-        if ver < min_ver:
-            print('skip')
-            # current date + 1 month
-            current = current + relativedelta(months=1)
-            continue
-
-        # get measures
-        num_ver.append(ver)  # number of vertices
-        degrees = np.array(current_g.degree()) # degree data
-        max_deg.append(np.max(degrees))  # maximum degree
-        mean_deg.append(np.mean(degrees))  # mean degree
-        deg.append(degrees) # complete degree data
-        if centrality_ana:
-            # do not use weights
-            if add_up:
-                current_cent = np.array(current_g.evcent(directed=False, scale=True))
-                mean_cent.append(np.mean(current_cent))  # mean centrality
-                cent.append(current_cent)  # complete centrality
-            # do use weights
-            else:
-                current_cent = np.array(current_g.evcent(directed=False, scale=True, weights=current_g.es['weight']))
-                mean_cent.append(np.mean(current_cent))  # mean centrality
-                cent.append(current_cent)  # complete centrality
-
-        vertices = current_g.vs['name']
-        # personal data
-        taylor = 'mark.taylor@enron.com'
-        try:
-            taylor_id = vertices.index(taylor)
-            deg_taylor = degrees[taylor_id]
-            cent_taylor = current_cent[taylor_id]
-        except:
-            deg_taylor = 0
-            cent_taylor = 0
-
-        kaminski = 'vince.kaminski@enron.com'
-        try:
-            kaminski_id = vertices.index(kaminski)
-            deg_kaminski = degrees[kaminski_id]
-            cent_kaminski = current_cent[kaminski_id]
-        except:
-            deg_kaminski = 0
-            cent_kaminski = 0
-
-        jones = 'tana.jones@enron.com'
-        try:
-            jones_id = vertices.index(jones)
-            deg_jones = degrees[jones_id]
-            cent_jones = current_cent[jones_id]
-        except:
-            deg_jones = 0
-            cent_jones = 0
-
-        klay = 'klay@enron.com'
-        try:
-            klay_id = vertices.index(klay)
-            deg_klay = degrees[klay_id]
-            cent_klay = current_cent[klay_id]
-        except:
-            deg_klay = 0
-            cent_klay = 0
-
-        # centrality data of certain persons
-        #cent_taylor = taylor.evcent(directed=False, scale=True, weights=current_g.es['weight'])
-
-        # store personal data
-        # degree
-        mark_taylor_deg.append(deg_taylor)
-        vince_kaminski_deg.append(deg_kaminski)
-        tana_jones_deg.append(deg_jones)
-        klay_deg.append(deg_klay)
-        # centrality
-        mark_taylor_cent.append(cent_taylor)
-        vince_kaminski_cent.append(cent_kaminski)
-        tana_jones_cent.append(cent_jones)
-        klay_cent.append(cent_klay)
-
-        '''
-        # check point where graph has fixed number of vertices
-        if current != start:
-            if len(current_g.vs) == num_ver[-2]:
-                # add information
-                cent.append(current_g.betweenness(directed=False)) # betweeness centrality
-                deg.append(current_g.degree()) # degrees
-                print(current_g.betweenness(directed=False)[-20:-10])
-                #dates = [current_string] * num_ver[-1]
-                #dates_const.extend(dates)
-                #if len(deg) > 1:
-                    #dif = np.array(deg[-1]) - np.array(deg[-2])
-        '''
-        # store string of date
-        dates_str.append(current_string)
-
-        # current date + 1 month
-        current = current + relativedelta(months=1)
-
-    ##### PLOTTING
-
-    # paths to save files
-    if add_up:
-        path_to_save = './statistics/dynamics/'
-
-    else:
-        path_to_save = './statistics/dynamics/no_add_up/'
-    '''
-    # plot vertices
-    lineplot((25, 25), dates_str, num_ver, 'date', '#vertices', 'Dynamics of Vertices', True, path_to_save + 'vertices.png')
-    # plot degree mean
-    lineplot((25, 25), dates_str, mean_deg, 'date', 'degree', 'Dynamics of Degree Mean', True, path_to_save + 'degree_mean.png')
-    '''
-    # plot degree
-    boxplot(data=deg, fig_size=(25,25), x_ticks=dates_str, x_label='date', y_label='degree', title='Dynamics of Degree', rotate=True, save_path=path_to_save + 'degree.png', log=False)
-    '''
-    if centrality_ana:
-        # plot centrality mean
-        lineplot((25, 25), dates_str, mean_cent, 'date', 'centrality', 'Dynamics of Eigenvector Centrality Mean', True, path_to_save + 'centrality_mean.png')
-        boxplot(data=cent, fig_size=(25,25), x_ticks=dates_str, x_label='date', y_label='centrality', title='Dynamics of Eigenvector Centrality', rotate=True, save_path=path_to_save + 'centrality.png')
-
-    # plot degrees of people
-    plt.figure(figsize=(25, 25))
-    sns.set_style("whitegrid")
-    plt.plot(dates_str, max_deg, label='maximum degree')
-    plt.plot(dates_str, mark_taylor_deg, label='Mark Taylor')
-    plt.plot(dates_str, vince_kaminski_deg, label='Vince Kaminski')
-    plt.plot(dates_str, tana_jones_deg, label='Tanja Jones')
-    plt.plot(dates_str, klay_deg, label='Kenneth Lay')
-    plt.xlabel('date')
-    plt.ylabel('degree')
-    plt.title('Dynamics of Personal Degrees')
-    plt.gca().set_xticklabels(dates_str, rotation=45)
-    plt.legend(loc='best')
-
-    plt.savefig(path_to_save + 'degree_person.png')
-
-    # cleaning plots
-    plt.gcf().clear()
-
-    # plot centrality of people
-    plt.figure(figsize=(25, 25))
-    sns.set_style("whitegrid")
-    plt.plot(dates_str, mark_taylor_cent, label='Mark Taylor')
-    plt.plot(dates_str, vince_kaminski_cent, label='Vince Kaminski')
-    plt.plot(dates_str, tana_jones_cent, label='Tanja Jones')
-    plt.plot(dates_str, klay_cent, label='Kenneth Lay')
-    plt.xlabel('date')
-    plt.ylabel('centrality')
-    plt.title('Dynamics of Personal Centrality')
-    plt.gca().set_xticklabels(dates_str, rotation=45)
-    plt.legend(loc='best')
-
-    plt.savefig(path_to_save + 'centrality_person.png')
-
-    # cleaning plots
-    plt.gcf().clear()
-    '''
-
-#dynamics_analysis(data, centrality_ana=False, add_up=False)
-
-########################################################################
-# SENTIMENT ANALYSIS
+# analysis dynamical case
+if dynamic:
+    # with decay
+    dynamics_analysis(g, start, end, centrality_ana=True, decay=True, limit=0.01)
+    # without decay
+    dynamics_analysis(g, start, end, centrality_ana=True, decay=False, limit=0.01)
 
 
 ########################################################################
