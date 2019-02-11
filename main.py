@@ -41,6 +41,7 @@ from igraph.drawing.text import TextDrawer
 import cairo
 # functions loaded form other files
 from functions.degree_distro import degree_distro
+from functions.correlations import degree_corr
 from functions.degree_centrality import dc
 from functions.preprocessing import prepare_data
 from functions.sentiment_analysis import sentiment_analysis
@@ -66,6 +67,7 @@ def parser():
     parser.add_argument("--draw_static", help='Draw network with communities for all times (circos and network like plot)', action='store_true') # default is false
     parser.add_argument("--draw_dynamic", help='Draw graph for each month', action='store_true') # default is false
     parser.add_argument("--distro", help='Degree distribution', action='store_true') # default is false
+    parser.add_argument("--corr", help='Degree correlation', action='store_true') # default is false
     parser.add_argument("--centrality", help='Show degree centrality', action='store_true') # default is false
     parser.add_argument("--sentiment", help='Plot sentiment distribution', action='store_true') # default is false
     parser.add_argument("--interaction", help='Plot interaction time differences', action='store_true') # default is false
@@ -81,6 +83,7 @@ def parser():
     draw_dynamic = args.draw_dynamic
     cols = args.cols.split()
     distro = args.distro
+    corr = args.corr
     centrality = args.centrality
     sentiment = args.sentiment
     interaction = args.interaction
@@ -88,11 +91,11 @@ def parser():
     detect_change = args.detect_change
     dynamic = args.dynamic
 
-    return data_link, not_load, draw_static, draw_dynamic, cols, distro, centrality, sentiment, interaction, activity, detect_change, dynamic
+    return data_link, not_load, draw_static, draw_dynamic, cols, distro, corr, centrality, sentiment, interaction, activity, detect_change, dynamic
 
 
 # pass on parser values
-data_link, not_load, draw_static, draw_dynamic, cols, distro, centrality, sentiment, interaction, activity, detect_change, dynamic = parser()
+data_link, not_load, draw_static, draw_dynamic, cols, distro, corr, centrality, sentiment, interaction, activity, detect_change, dynamic = parser()
 
 
 ########################################################################
@@ -100,7 +103,7 @@ data_link, not_load, draw_static, draw_dynamic, cols, distro, centrality, sentim
 
 # load data
 if not_load:
-    data = pd.read_csv(data_link, header=0, sep=' ', usecols=cols)#.head(10000)
+    data = pd.read_csv(data_link, header=0, sep=' ', usecols=cols)#.head(1000)
     print('data loaded')
 
 else:
@@ -188,6 +191,12 @@ if distro:
     degree_distro(g_)
     print('degree distribution plotted')
 
+if corr:
+    # simplify graph by removing loops and multiple edges; weights are added
+    g_ = g.simplify(multiple=True, combine_edges=dict(weight='sum', date='ignore', sentiment='ignore'))
+    degree_corr(g_)
+    print('degree correlation plotted')
+
 if centrality:
     # simplify graph by removing loops and multiple edges; weights are added
     g_ = g.simplify(multiple=True, combine_edges=dict(weight='sum', date='ignore', sentiment='ignore'))
@@ -265,8 +274,8 @@ if draw_static:
     visual_style = {}
 
     # define visual styling
-    max_size = 5 # maximum vertex size
-    min_width = 0.5 # maximum edge size
+    max_size = 5  # maximum vertex size
+    min_width = 0.5  # maximum edge size
 
     visual_style['vertex_size'] = np.log(np.array(list(community_dict.values())))*max_size
     visual_style['layout'] = g_con.layout_fruchterman_reingold()
@@ -276,7 +285,7 @@ if draw_static:
     visual_style['edge_color'] = 'rgba(0,0,0,0.1)'
     visual_style['mark_groups'] = False
     visual_style['margin'] = 50
-    visual_style['bbox'] = (700,700)
+    visual_style['bbox'] = (700, 700)
 
     # plot graph grouped by communities
     ig.plot(g_con, './figures/communities_united.png', **visual_style)
@@ -300,7 +309,7 @@ if draw_dynamic:
     visual_style = {}
 
     # define visual styling
-    max_size = 40 # maximum vertex size
+    max_size = 40  # maximum vertex size
 
     color_indices = np.arange(len(g.vs))
     visual_style['layout'] = g.layout_fruchterman_reingold()
